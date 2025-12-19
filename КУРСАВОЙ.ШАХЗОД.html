@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Компьютерлік дүкен</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 body {
     font-family: Arial, sans-serif;
@@ -56,6 +57,22 @@ p { font-weight: bold; margin: 5px 0; }
     border-radius: 5px;
 }
 input { margin: 5px 0; padding: 5px; width: 100%; }
+
+/* Диаграмма стиль */
+.charts {
+    display:flex;
+    gap:5px;
+    margin-top:5px;
+    flex-wrap: wrap;
+}
+.chart-box { width:75px; height:75px; }
+.chart-box canvas { width:75px !important; height:75px !important; }
+
+/* Іздеу кезінде ерекшелеу */
+.highlight {
+    background-color: #ffff99 !important;
+    transition: background-color 1s ease;
+}
 </style>
 </head>
 <body>
@@ -71,6 +88,11 @@ ID: <input type="number" id="productId"><br>
 Саны: <input type="number" id="productQty"><br>
 Бағасы: <input type="number" id="productPrice"><br>
 <button class="add" onclick="addProduct()">Қосу</button>
+
+<h2>ID арқылы поиск</h2>
+<input type="number" id="searchId" placeholder="ID енгізіңіз">
+<button onclick="searchById()">Іздеу</button>
+<button onclick="clearSearch()">Тазалау</button>
 
 <h2>ID арқылы сату / отмена</h2>
 ID: <input type="number" id="modifyId"><br>
@@ -91,6 +113,7 @@ ID: <input type="number" id="modifyId"><br>
 
 <script>
 let products = [];
+let lastHighlightId = null;
 
 // Сақтау және жүктеу
 function saveProducts() {
@@ -101,21 +124,40 @@ function loadProducts() {
     if(data) products = JSON.parse(data);
 }
 
+// Диаграмма сызу
+function drawPie(id, labels, data, colors){
+    new Chart(document.getElementById(id), {
+        type:'pie',
+        data:{ labels, datasets:[{ data, backgroundColor:colors }] },
+        options:{ responsive:false, maintainAspectRatio:true, plugins:{ legend:{ display:false } } }
+    });
+}
+
 // Кесте мен статистиканы көрсету
-function renderStats() {
+function renderStats(filterId=null) {
     let statsDiv = document.getElementById("productStats");
     statsDiv.innerHTML = "";
-    products.forEach(p => {
+    let list = filterId ? products.filter(p=>p.id==filterId) : products;
+    list.forEach(p => {
         let remainingSum = p.price * (p.qty - (p.sold || 0));
         let soldSum = (p.sold || 0) * p.price;
+
         let div = document.createElement("div");
         div.className = "stat-block";
+        div.id = "stat-" + p.id;
         div.innerHTML = `
             <p><strong>ID:</strong> ${p.id} | <strong>Атауы:</strong> ${p.name}</p>
             <p>Қалған саны: ${p.qty - (p.sold || 0)} | Қалған сомасы: ${remainingSum} тг</p>
             <p>Сатылған саны: ${p.sold || 0} | Сатылған сомасы: ${soldSum} тг</p>
+            <div class="charts">
+                <div class="chart-box"><canvas id="count${p.id}"></canvas></div>
+                <div class="chart-box"><canvas id="sum${p.id}"></canvas></div>
+            </div>
         `;
         statsDiv.appendChild(div);
+
+        drawPie(`count${p.id}`, ['Сатылған','Қалған'], [p.sold || 0, p.qty - (p.sold || 0)], ['#f44336','#4CAF50']);
+        drawPie(`sum${p.id}`, ['Сатылған сумма','Қалған сумма'], [soldSum, remainingSum], ['#FF9800','#2196F3']);
     });
 }
 
@@ -123,18 +165,12 @@ function renderTable() {
     let table = document.getElementById("productTable");
     table.innerHTML = `
     <tr>
-        <th>ID</th>
-        <th>Атауы</th>
-        <th>Саны</th>
-        <th>Бағасы</th>
-        <th>Сатылған</th>
-        <th>Сату</th>
-        <th>Отмена</th>
-        <th>Өшіру</th>
+        <th>ID</th><th>Атауы</th><th>Саны</th><th>Бағасы</th>
+        <th>Сатылған</th><th>Сату</th><th>Отмена</th><th>Өшіру</th>
     </tr>`;
-    products.forEach((p, index) => {
+    products.forEach((p,index)=>{
         table.innerHTML += `
-        <tr>
+        <tr id="row-${p.id}">
             <td>${p.id}</td>
             <td>${p.name}</td>
             <td>${p.qty}</td>
@@ -148,6 +184,34 @@ function renderTable() {
     renderStats();
 }
 
+// Іздеу
+function searchById(){
+    clearSearch();
+    let id = document.getElementById("searchId").value;
+    if(!id) return;
+    let row = document.getElementById("row-" + id);
+    let stat = document.getElementById("stat-" + id);
+    if(row && stat){
+        row.classList.add("highlight");
+        stat.classList.add("highlight");
+        row.scrollIntoView({behavior:"smooth", block:"center"});
+        lastHighlightId = id;
+    } else {
+        alert("Тауар табылмады!");
+    }
+}
+
+// Іздеуді тазалау
+function clearSearch(){
+    if(lastHighlightId){
+        let row = document.getElementById("row-" + lastHighlightId);
+        let stat = document.getElementById("stat-" + lastHighlightId);
+        if(row) row.classList.remove("highlight");
+        if(stat) stat.classList.remove("highlight");
+        lastHighlightId = null;
+    }
+}
+
 // Тауар қосу
 function addProduct() {
     let id = parseInt(document.getElementById("productId").value);
@@ -155,13 +219,11 @@ function addProduct() {
     let qty = parseInt(document.getElementById("productQty").value);
     let price = parseFloat(document.getElementById("productPrice").value);
     if(id && name && qty && price){
-        products.push({id, name, qty, price, sold: 0});
+        products.push({id,name,qty,price,sold:0});
         saveProducts();
         renderTable();
         alert("Тауар қосылды!");
-    } else {
-        alert("Барлық өрістерді толтырыңыз!");
-    }
+    } else { alert("Барлық өрістерді толтырыңыз!"); }
 }
 
 // Бір бірліктен сату
@@ -170,9 +232,7 @@ function sellOne(index){
         products[index].sold += 1;
         saveProducts();
         renderTable();
-    } else {
-        alert("Саны жеткіліксіз!");
-    }
+    } else { alert("Саны жеткіліксіз!"); }
 }
 
 // Бір бірліктен отмена
@@ -191,17 +251,9 @@ function sellById() {
     let product = products.find(p => p.id === id);
     if(product && qty > 0){
         let available = product.qty - (product.sold || 0);
-        if(available >= qty){
-            product.sold += qty;
-            saveProducts();
-            renderTable();
-            alert(qty + " тауар сатылды!");
-        } else {
-            alert("Қолда бар саны жеткіліксіз! Қолда бар: " + available);
-        }
-    } else {
-        alert("Қате ID немесе сан!");
-    }
+        if(available >= qty){ product.sold += qty; saveProducts(); renderTable(); alert(qty + " тауар сатылды!"); }
+        else alert("Қолда бар саны жеткіліксіз! Қолда бар: " + available);
+    } else alert("Қате ID немесе сан!");
 }
 
 // ID арқылы отмена
@@ -210,22 +262,14 @@ function cancelById() {
     let qty = parseInt(document.getElementById("modifyQty").value);
     let product = products.find(p => p.id === id);
     if(product && qty > 0){
-        if((product.sold || 0) >= qty){
-            product.sold -= qty;
-            saveProducts();
-            renderTable();
-            alert(qty + " тауар сатылмаған ретінде қайтарылды!");
-        } else {
-            alert("Сатылған саны жеткіліксіз! Қолда бар: " + (product.sold || 0));
-        }
-    } else {
-        alert("Қате ID немесе сан!");
-    }
+        if((product.sold || 0) >= qty){ product.sold -= qty; saveProducts(); renderTable(); alert(qty + " тауар сатылмаған ретінде қайтарылды!"); }
+        else alert("Сатылған саны жеткіліксіз! Қолда бар: " + (product.sold || 0));
+    } else alert("Қате ID немесе сан!");
 }
 
 // Кестедегі өшіру
-function deleteProduct(index) {
-    products.splice(index, 1);
+function deleteProduct(index){
+    products.splice(index,1);
     saveProducts();
     renderTable();
 }
