@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+<meta charset="UTF-8">
+<title>Компьютерлік дүкен</title>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f4f4f9;
+    margin: 0; padding: 0;
+}
+header {
+    background: #4CAF50;
+    color: white;
+    text-align: center;
+    padding: 20px 0;
+}
+.container {
+    width: 90%;
+    max-width: 900px;
+    margin: 20px auto;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+th, td {
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+    text-align: center;
+}
+th {
+    background: #f2f2f2;
+}
+button {
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+button.sell { background: #4CAF50; color: white; }
+button.cancel { background: #FF9800; color: white; }
+button.delete { background: #f44336; color: white; }
+button.add { background: #2196F3; color: white; margin-top: 10px; }
+.section { margin-top: 20px; }
+p { font-weight: bold; margin: 5px 0; }
+.stat-block {
+    background: #e8f0fe;
+    padding: 10px;
+    margin: 5px 0;
+    border-radius: 5px;
+}
+input { margin: 5px 0; padding: 5px; width: 100%; }
+</style>
+</head>
+<body>
+
+<header>
+<h1>Компьютерлік дүкенді басқару жүйесі</h1>
+</header>
+
+<div class="container">
+<h2>Тауар қосу</h2>
+ID: <input type="number" id="productId"><br>
+Атауы: <input type="text" id="productName"><br>
+Саны: <input type="number" id="productQty"><br>
+Бағасы: <input type="number" id="productPrice"><br>
+<button class="add" onclick="addProduct()">Қосу</button>
+
+<h2>ID арқылы сату / отмена</h2>
+ID: <input type="number" id="modifyId"><br>
+Саны: <input type="number" id="modifyQty"><br>
+<button class="sell" onclick="sellById()">Сату</button>
+<button class="cancel" onclick="cancelById()">Отмена</button>
+
+<div class="section">
+<h2>Тауарлар тізімі</h2>
+<table id="productTable"></table>
+</div>
+
+<div class="section">
+<h2>Әр тауар статистикасы</h2>
+<div id="productStats"></div>
+</div>
+</div>
+
+<script>
+let products = [];
+
+// Сақтау және жүктеу
+function saveProducts() {
+    localStorage.setItem("products", JSON.stringify(products));
+}
+function loadProducts() {
+    let data = localStorage.getItem("products");
+    if(data) products = JSON.parse(data);
+}
+
+// Кесте мен статистиканы көрсету
+function renderStats() {
+    let statsDiv = document.getElementById("productStats");
+    statsDiv.innerHTML = "";
+    products.forEach(p => {
+        let remainingSum = p.price * (p.qty - (p.sold || 0));
+        let soldSum = (p.sold || 0) * p.price;
+        let div = document.createElement("div");
+        div.className = "stat-block";
+        div.innerHTML = `
+            <p><strong>ID:</strong> ${p.id} | <strong>Атауы:</strong> ${p.name}</p>
+            <p>Қалған саны: ${p.qty - (p.sold || 0)} | Қалған сомасы: ${remainingSum} тг</p>
+            <p>Сатылған саны: ${p.sold || 0} | Сатылған сомасы: ${soldSum} тг</p>
+        `;
+        statsDiv.appendChild(div);
+    });
+}
+
+function renderTable() {
+    let table = document.getElementById("productTable");
+    table.innerHTML = `
+    <tr>
+        <th>ID</th>
+        <th>Атауы</th>
+        <th>Саны</th>
+        <th>Бағасы</th>
+        <th>Сатылған</th>
+        <th>Сату</th>
+        <th>Отмена</th>
+        <th>Өшіру</th>
+    </tr>`;
+    products.forEach((p, index) => {
+        table.innerHTML += `
+        <tr>
+            <td>${p.id}</td>
+            <td>${p.name}</td>
+            <td>${p.qty}</td>
+            <td>${p.price}</td>
+            <td>${p.sold || 0}</td>
+            <td><button class="sell" onclick="sellOne(${index})">+1 Сату</button></td>
+            <td><button class="cancel" onclick="cancelOne(${index})">-1 Отмена</button></td>
+            <td><button class="delete" onclick="deleteProduct(${index})">Өшіру</button></td>
+        </tr>`;
+    });
+    renderStats();
+}
+
+// Тауар қосу
+function addProduct() {
+    let id = parseInt(document.getElementById("productId").value);
+    let name = document.getElementById("productName").value;
+    let qty = parseInt(document.getElementById("productQty").value);
+    let price = parseFloat(document.getElementById("productPrice").value);
+    if(id && name && qty && price){
+        products.push({id, name, qty, price, sold: 0});
+        saveProducts();
+        renderTable();
+        alert("Тауар қосылды!");
+    } else {
+        alert("Барлық өрістерді толтырыңыз!");
+    }
+}
+
+// Бір бірліктен сату
+function sellOne(index){
+    if(products[index].qty - (products[index].sold || 0) > 0){
+        products[index].sold += 1;
+        saveProducts();
+        renderTable();
+    } else {
+        alert("Саны жеткіліксіз!");
+    }
+}
+
+// Бір бірліктен отмена
+function cancelOne(index){
+    if(products[index].sold > 0){
+        products[index].sold -= 1;
+        saveProducts();
+        renderTable();
+    }
+}
+
+// ID арқылы сату
+function sellById() {
+    let id = parseInt(document.getElementById("modifyId").value);
+    let qty = parseInt(document.getElementById("modifyQty").value);
+    let product = products.find(p => p.id === id);
+    if(product && qty > 0){
+        let available = product.qty - (product.sold || 0);
+        if(available >= qty){
+            product.sold += qty;
+            saveProducts();
+            renderTable();
+            alert(qty + " тауар сатылды!");
+        } else {
+            alert("Қолда бар саны жеткіліксіз! Қолда бар: " + available);
+        }
+    } else {
+        alert("Қате ID немесе сан!");
+    }
+}
+
+// ID арқылы отмена
+function cancelById() {
+    let id = parseInt(document.getElementById("modifyId").value);
+    let qty = parseInt(document.getElementById("modifyQty").value);
+    let product = products.find(p => p.id === id);
+    if(product && qty > 0){
+        if((product.sold || 0) >= qty){
+            product.sold -= qty;
+            saveProducts();
+            renderTable();
+            alert(qty + " тауар сатылмаған ретінде қайтарылды!");
+        } else {
+            alert("Сатылған саны жеткіліксіз! Қолда бар: " + (product.sold || 0));
+        }
+    } else {
+        alert("Қате ID немесе сан!");
+    }
+}
+
+// Кестедегі өшіру
+function deleteProduct(index) {
+    products.splice(index, 1);
+    saveProducts();
+    renderTable();
+}
+
+// Бастапқы жүктеу
+loadProducts();
+renderTable();
+</script>
+
+</body>
+</html>
